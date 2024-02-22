@@ -46,7 +46,7 @@ class Kiwoom(QAxWidget):
     def get_account_number(self, tag="ACCNO"): # 계좌번호를 의미하는 "ACCNO", tag에 따라 얻어 오는 값 변경
         account_list = self.dynamicCall("GetLoginInfo(QString)", tag)  # tag로 전달한 요청에 대한 응답을 받아옴
         account_number = account_list.split(';')[0]   # 국내 주식 모의투자만 신청했을때를 가정, 계좌가 한 개임을 보장
-        print(account_number)
+        print("계좌번호 :",account_number)
         return account_number
 
     def get_code_list_by_market(self, market_type): # 주식 시장별 종목 코드 리스트 뽑기 ,market_type은 어떤 시장에서 종목을 얻어 올지 의미하는 구분 값
@@ -90,7 +90,7 @@ class Kiwoom(QAxWidget):
         else:
             self.has_next_tr_data = False
 
-        if rqname == "opt10081_req":
+        if rqname == "opt10081_req": #해당 종목의 일봉을 얻어오는 TR
             ohlcv = {'date': [], 'open': [], 'high': [], 'low': [], 'close': [], 'volume': []}
 
             for i in range(tr_data_cnt):
@@ -109,5 +109,20 @@ class Kiwoom(QAxWidget):
                 ohlcv['volume'].append(int(volume))
 
             self.tr_data = ohlcv
+
+        elif rqname == "opw00001_req": #예수금을 얻어오는 TR
+            deposit = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, 0, "주문가능금액")
+            self.tr_data = int(deposit)
+            print("주문 가능 금액 :",self.tr_data)
+
         self.tr_event_loop.exit()
         time.sleep(0.5)
+
+    def get_deposit(self): # 조회 대상 계좌의 예수금을 얻어 오는 함수
+        self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", self.account_number)
+        self.dynamicCall("SetInputValue(QString, QString)", "비밀번호입력매체구분", "00")
+        self.dynamicCall("SetInputValue(QString, QString)", "조회구분", "2")
+        self.dynamicCall("CommRqData(QString, QString, int, QString)", "opw00001_req", "opw00001", 0, "0002")
+
+        self.tr_event_loop.exec_()
+        return self.tr_data

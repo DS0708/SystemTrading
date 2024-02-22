@@ -17,7 +17,10 @@ Kiwoom = Kiwoom()
 #     code_name = Kiwoom.get_master_code_name(code)
 #     print(code,code_name)
 
-df = Kiwoom.get_price_data("005930")
-print(df)
+# df = Kiwoom.get_price_data("005930")
+# print(df)
+
+deposit = Kiwoom.get_deposit()
+
 app.exec_()
 
