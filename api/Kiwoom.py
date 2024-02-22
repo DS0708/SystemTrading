@@ -126,3 +126,16 @@ class Kiwoom(QAxWidget):
 
         self.tr_event_loop.exec_()
         return self.tr_data
+
+    # SendOrder(주문 발생) -> OnReceiveTrData(주문 응답) -> OnReceiveMsg(주문 메시지 수신) -> OnReceiveChejan(주문 접수/체결)
+    def send_order(self, rqname, screen_no, order_type, code, order_quantity, order_price, order_classification,
+                   origin_order_number=""): #주문 발생 함수
+        # order_type : 매수/매도/취소 주문 같은 주문 유형, order_quantity: 매매할 종목의 주문 수량
+        # order_pricee: 주문 가격을 나타내며 시장가로 주문할 때는 의미가 없느 필드, 이 프로젝트에서는 시장가 주문으로 인한 슬리피지를 없애고자 주문 가격을 지정하여 사용
+        # order_classification: 거래 구분을 나타내는 매개변수이며, 원하는 주문 방식마다 코드로 구분(예: 지정가 00, 시장가 03)
+        # order_order_number : 정정 혹은 취소하려는 주문 번호를 의미하는 매개변수, 신규 주문 때는 빈 값
+        order_result = self.dynamicCall(
+            "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",
+            [rqname, screen_no, self.account_number, order_type, code, order_quantity, order_price,
+             order_classification, origin_order_number])
+        return order_result
