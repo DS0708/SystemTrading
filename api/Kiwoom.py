@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 import time
 import pandas as pd
+from util.const import *
 
 
 class Kiwoom(QAxWidget):
@@ -11,11 +12,15 @@ class Kiwoom(QAxWidget):
         super().__init__()
         self._make_kiwoom_instance()    # 설치한 API를 사용할 수 있도록 설정
         self._set_signal_slots()        # 로그인, 실시간 정보, 기타 제공받을 수 있는 데이터에 대한 응답을 받을 수 있는 slot함수들을 등록
+
         self._comm_connect()            # 로그인 요청 보내기, _login_slot에서 응답을 받음
 
         self.account_number = self.get_account_number() # 계좌번호 저장
 
         self.tr_event_loop = QEventLoop() #tr요청에 대한 응답 대기를 위한 변수
+
+        self.order = {}     #종목 코드를 키 값으로 해당 종목의 주문 정보를 담은 딕셔너리
+        self.balance = {}   #종목 코드를 키 값으로 해당 종목의 매수 정보를 담은 딕셔너리
 
     def _make_kiwoom_instance(self):
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
@@ -24,8 +29,14 @@ class Kiwoom(QAxWidget):
         """API로 보내는 요청들을 받아올 slot을 등록하는 함수"""
         # 로그인 응답의 결과를 _on_login_connect을 통해 받도록 설정
         self.OnEventConnect.connect(self._login_slot)
+
         # TR의 응답 결과를 _on_receive_tr_data를 통해 받도록 설정
         self.OnReceiveTrData.connect(self._on_receive_tr_data)
+
+        # TR/주문 메시지를 _on_receive_msg을 통해 받도록 설정
+        self.OnReceiveMsg.connect(self._on_receive_msg)
+        # 주문 접수/체결 결과를 _on_chejan_slot을 통해 받도록 설정
+        self.OnReceiveChejanData.connect(self._on_chejan_slot)
 
     def _login_slot(self, err_code):
         if err_code == 0:
@@ -139,3 +150,53 @@ class Kiwoom(QAxWidget):
             [rqname, screen_no, self.account_number, order_type, code, order_quantity, order_price,
              order_classification, origin_order_number])
         return order_result
+
+    def _on_receive_msg(self, screen_no, rqname, trcode, msg):  #OnReceiveMsg에 대한 응답을 받아 오는 slot
+        print("[Kiwoom] _on_receive_msg is called {} / {} / {} / {}".format(screen_no, rqname, trcode, msg))
+
+    #
+    def _on_chejan_slot(self, s_gubun, n_item_cnt, s_fid_list):
+        print("[Kiwoom] _on_chejan_slot is called {} / {} / {}".format(s_gubun, n_item_cnt, s_fid_list))
+
+        # 9201;9203;9205;9001;912;913;302;900;901;처럼 전달되는 fid 리스트를 ';' 기준으로 구분함
+        for fid in s_fid_list.split(";"):
+            if fid in FID_CODES:
+                # 9001-종목코드 얻어오기, 종목코드는 A007700처럼 앞자리에 문자가 오기 때문에 앞자리를 제거함
+                code = self.dynamicCall("GetChejanData(int)", '9001')[1:]
+
+                # fid를 이용해 data를 얻어오기(ex: fid:9203를 전달하면 주문번호를 수신해 data에 저장됨)
+                data = self.dynamicCall("GetChejanData(int)", fid)
+
+                # 데이터에 +,-가 붙어있는 경우 (ex: +매수, -매도) 제거
+                data = data.strip().lstrip('+').lstrip('-')
+
+                # 수신한 데이터는 전부 문자형인데 문자형 중에 숫자인 항목들(ex:매수가)은 숫자로 변형이 필요함
+                if data.isdigit():
+                    data = int(data)
+
+                # fid 코드에 해당하는 항목(item_name)을 찾음(ex: fid=9201 > item_name=계좌번호)
+                item_name = FID_CODES[fid]
+
+                # 얻어온 데이터를 출력(ex: 주문가격 : 37600)
+                print("{}: {}".format(item_name, data))
+
+                # 접수/체결(s_gubun=0)이면 self.order, 잔고이동이면 self.balance에 값을 저장
+                if int(s_gubun) == 0:
+                    # 아직 order에 종목코드가 없다면 신규 생성하는 과정
+                    if code not in self.order.keys():
+                        self.order[code] = {}
+                    # order 딕셔너리에 데이터 저장
+                    self.order[code].update({item_name: data})
+                elif int(s_gubun) == 1:
+                    # 아직 balance에 종목코드가 없다면 신규 생성하는 과정
+                    if code not in self.balance.keys():
+                        self.balance[code] = {}
+                    # balance 딕셔너리에 데이터 저장
+                    self.balance[code].update({item_name: data})
+        # s_gubun값에 따라 저장한 결과를 출력
+        if int(s_gubun) == 0:
+            print("* 주문 출력(self.order)")
+            print(self.order)
+        elif int(s_gubun) == 1:
+            print("* 잔고 출력(self.balance)")
+            print(self.balance)
