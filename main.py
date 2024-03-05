@@ -32,5 +32,9 @@ deposit = Kiwoom.get_deposit()
 orders = Kiwoom.get_order()
 print(orders)
 
+# 주식 잔고 받아오기
+position = Kiwoom.get_balance()
+print(position)
+
 app.exec_()
 
