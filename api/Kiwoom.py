@@ -126,6 +126,60 @@ class Kiwoom(QAxWidget):
             self.tr_data = int(deposit)
             print("주문 가능 금액 :",self.tr_data)
 
+        elif rqname == "opt10075_req": #당일 주문 정보 얻어 오는 TR
+            for i in range(tr_data_cnt):
+                code = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "종목코드")
+                code_name = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "종목명")
+                order_number = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "주문번호")
+                order_status = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "주문상태")
+                order_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i,
+                                                  "주문수량")
+                order_price = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "주문가격")
+                current_price = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "현재가")
+                order_type = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "주문구분")
+                left_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i,
+                                                 "미체결수량")
+                executed_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i,
+                                                     "체결량")
+                ordered_at = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "시간")
+                fee = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "당일매매수수료")
+                tax = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "당일매매세금")
+
+                # 데이터 형변환 및 가공
+                code = code.strip()
+                code_name = code_name.strip()
+                order_number = str(int(order_number.strip()))
+                order_status = order_status.strip()
+                order_quantity = int(order_quantity.strip())
+                order_price = int(order_price.strip())
+
+                current_price = int(current_price.strip().lstrip('+').lstrip('-'))
+                order_type = order_type.strip().lstrip('+').lstrip('-')  # +매수,-매도처럼 +,- 제거
+                left_quantity = int(left_quantity.strip())
+                executed_quantity = int(executed_quantity.strip())
+                ordered_at = ordered_at.strip()
+                fee = int(fee)
+                tax = int(tax)
+
+                # code를 key값으로 한 딕셔너리 변환
+                self.order[code] = {
+                    '종목코드': code,
+                    '종목명': code_name,
+                    '주문번호': order_number,
+                    '주문상태': order_status,
+                    '주문수량': order_quantity,
+                    '주문가격': order_price,
+                    '현재가': current_price,
+                    '주문구분': order_type,
+                    '미체결수량': left_quantity,
+                    '체결량': executed_quantity,
+                    '주문시간': ordered_at,
+                    '당일매매수수료': fee,
+                    '당일매매세금': tax
+                }
+
+            self.tr_data = self.order
+
         self.tr_event_loop.exit()
         time.sleep(0.5)
 
@@ -156,7 +210,8 @@ class Kiwoom(QAxWidget):
 
     #
     def _on_chejan_slot(self, s_gubun, n_item_cnt, s_fid_list):
-        print("[Kiwoom] _on_chejan_slot is called {} / {} / {}".format(s_gubun, n_item_cnt, s_fid_list))
+        print("[Kiwoom] _on_chejan_slot is called "
+              "{} / {} / {}".format(s_gubun, n_item_cnt, s_fid_list))
 
         # 9201;9203;9205;9001;912;913;302;900;901;처럼 전달되는 fid 리스트를 ';' 기준으로 구분함
         for fid in s_fid_list.split(";"):
@@ -195,8 +250,22 @@ class Kiwoom(QAxWidget):
                     self.balance[code].update({item_name: data})
         # s_gubun값에 따라 저장한 결과를 출력
         if int(s_gubun) == 0:
+            print()
             print("* 주문 출력(self.order)")
             print(self.order)
+            print()
         elif int(s_gubun) == 1:
+            print()
             print("* 잔고 출력(self.balance)")
             print(self.balance)
+            print()
+
+    def get_order(self): # 주문 정보를 얻어 오는 함수
+        self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", self.account_number)
+        self.dynamicCall("SetInputValue(QString, QString)", "전체종목구분", "0")
+        self.dynamicCall("SetInputValue(QString, QString)", "체결구분", "0")  # 0:전체, 1:미체결, 2:체결
+        self.dynamicCall("SetInputValue(QString, QString)", "매매구분", "0")  # 0:전체, 1:매도, 2:매수
+        self.dynamicCall("CommRqData(QString, QString, int, QString)", "opt10075_req", "opt10075", 0, "0002")
+
+        self.tr_event_loop.exec_()
+        return self.tr_data
